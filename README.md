@@ -1,0 +1,2 @@
+# osyniaTrade
+pine scripts
