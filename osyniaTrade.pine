@@ -1,0 +1,63 @@
+// ****** Licence ******
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// ©Osynia2026
+
+// ****** Version ******
+//@version=6
+
+// ****** Description de jackieTrade ******
+// Mon script osyniaTrade
+
+// ****** Historique des versions ******
+// Version 0.0.0 - simple macd test
+
+// ****** Declarations ******
+indicator("osyniaTrade-0.0.0", overlay=true, max_labels_count=500)
+
+// ****** Import ******
+
+// ****** Constantes ******
+
+// ****** Inputs ******
+
+fastInput = input(12, "rapide")
+slowInput = input(26, "Slow length")
+
+// ****** Fonctions ******
+
+// @function     -
+// @param        -
+// @returns      -
+// Dependencies  -
+
+// ****** Calculs ******
+
+// fastMA = ta.ema(close, fastInput)
+// slowMA = ta.ema(close, slowInput)
+// macd = fastMA - slowMA
+// signal = ta.ema(macd, 9)
+[macdLine, signalLine, histLine] = ta.macd(close, fastInput, slowInput, 9)
+
+// ****** Strategies ******
+
+// ****** Visuels ******
+
+// plot(macd, color = color.blue)
+// plot(signal, color = color.orange)
+
+plot(macdLine, color = color.red)
+plot(signalLine, color = color.yellow)
+
+// ****** Alertes ******
+
+
+
+
+
+
+
+
+
+
+
+
