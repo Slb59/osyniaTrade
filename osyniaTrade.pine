@@ -8,20 +8,42 @@
 // ****** Description de jackieTrade ******
 // Mon script osyniaTrade
 
-// ****** Historique des versions ******
-// Version 0.0.0 - simple macd test
-
 // ****** Declarations ******
-indicator("osyniaTrade-0.0.0", overlay=true, max_labels_count=500)
+indicator('osyniaTrade-0.0.1', overlay=true, max_labels_count=500)
 
 // ****** Import ******
 
 // ****** Constantes ******
+bearColor = color.red
+bullColor = color.new(color.green, 0)
+hiddenBullColor = color.new(color.green, 80)
+hiddenBearColor = color.new(color.red, 80)
+textColor = color.white
+noneColor = color.new(color.gray, 100)
 
 // ****** Inputs ******
 
-fastInput = input(12, "rapide")
-slowInput = input(26, "Slow length")
+// ===== PARAMÈTRES MACD =====
+GRP_MACD = 'MACD'
+fastInput = input(12, 'rapide', group=GRP_MACD)
+slowInput = input(26, 'Slow length', group=GRP_MACD)
+
+// ===== PARAMÈTRES RSI =====
+GRP_RSI = 'RSI'
+lenRSIInput = input.int(title='Période du RSI', minval=1, defval=14, group=GRP_RSI)
+srcRSIInput = input(title='RSI Source', defval=close, group=GRP_RSI)
+// Nombre de bougies à gauche/droite pour détecter les pivots.
+lbRRSIInput = input(title='Pivot Lookback Right', defval=5, display = display.none, group=GRP_RSI)
+lbLRSIInput = input(title='Pivot Lookback Left', defval=5, display = display.none, group=GRP_RSI)
+// Plage de recherche pour les divergences.
+rangeUpperRSIInput = input(title='Max of Lookback Range', defval=60, display = display.none, group=GRP_RSI)
+rangeLowerRSIInput = input(title='Min of Lookback Range', defval=5, display = display.none, group=GRP_RSI)
+// Options pour afficher/masquer les divergences.
+plotBullRSIInput = input(title='Plot Bullish', defval=true, display = display.none, group=GRP_RSI)
+plotHiddenBullRSIInput = input(title='Plot Hidden Bullish', defval=false, display = display.none, group=GRP_RSI)
+plotBearRSIInput = input(title='Plot Bearish', defval=true, display = display.none, group=GRP_RSI)
+plotHiddenBearRSIInput = input(title='Plot Hidden Bearish', defval=false, display = display.none, group=GRP_RSI)
+
 
 // ****** Fonctions ******
 
@@ -32,11 +54,68 @@ slowInput = input(26, "Slow length")
 
 // ****** Calculs ******
 
-// fastMA = ta.ema(close, fastInput)
-// slowMA = ta.ema(close, slowInput)
-// macd = fastMA - slowMA
-// signal = ta.ema(macd, 9)
+// macd
 [macdLine, signalLine, histLine] = ta.macd(close, fastInput, slowInput, 9)
+
+// rsi
+osc = ta.rsi(srcRSIInput, lenRSIInput)
+plFound = na(ta.pivotlow(osc, lbLRSIInput, lbRRSIInput)) ? false : true
+phFound = na(ta.pivothigh(osc, lbLRSIInput, lbRRSIInput)) ? false : true
+
+_inRange(cond) =>
+	bars = ta.barssince(cond == true)
+	rangeLowerRSIInput <= bars and bars <= rangeUpperRSIInput
+
+//------------------------------------------------------------------------------
+// Regular Bullish
+// Osc: Higher Low
+inRangePl = _inRange(plFound[1])
+oscHL = osc[lbRRSIInput] > ta.valuewhen(plFound, osc[lbRRSIInput], 1) and inRangePl
+
+// Price: Lower Low
+
+priceLL = low[lbRRSIInput] < ta.valuewhen(plFound, low[lbRRSIInput], 1)
+bullCondAlert = priceLL and oscHL and plFound
+bullCond = plotBullRSIInput and bullCondAlert
+
+//------------------------------------------------------------------------------
+// Hidden Bullish
+// Osc: Lower Low
+
+oscLL = osc[lbRRSIInput] < ta.valuewhen(plFound, osc[lbRRSIInput], 1) and inRangePl
+
+// Price: Higher Low
+
+priceHL = low[lbRRSIInput] > ta.valuewhen(plFound, low[lbRRSIInput], 1)
+hiddenBullCondAlert = priceHL and oscLL and plFound
+hiddenBullCond = plotHiddenBullRSIInput and hiddenBullCondAlert
+
+//------------------------------------------------------------------------------
+// Regular Bearish
+// Osc: Lower High
+inRangePh = _inRange(phFound[1])
+oscLH = osc[lbRRSIInput] < ta.valuewhen(phFound, osc[lbRRSIInput], 1) and inRangePh
+
+// Price: Higher High
+
+priceHH = high[lbRRSIInput] > ta.valuewhen(phFound, high[lbRRSIInput], 1)
+
+bearCondAlert = priceHH and oscLH and phFound
+bearCond = plotBearRSIInput and bearCondAlert
+
+//------------------------------------------------------------------------------
+// Hidden Bearish
+// Osc: Higher High
+
+oscHH = osc[lbRRSIInput] > ta.valuewhen(phFound, osc[lbRRSIInput], 1) and inRangePh
+
+// Price: Lower High
+
+priceLH = high[lbRRSIInput] < ta.valuewhen(phFound, high[lbRRSIInput], 1)
+
+hiddenBearCondAlert = priceLH and oscHH and phFound
+hiddenBearCond = plotHiddenBearRSIInput and hiddenBearCondAlert
+
 
 // ****** Strategies ******
 
@@ -48,16 +127,104 @@ slowInput = input(26, "Slow length")
 plot(macdLine, color = color.red)
 plot(signalLine, color = color.yellow)
 
+plot(osc, title="RSI", linewidth=2, color=#2962FF)
+hline(50, title="Middle Line", color=#787B86, linestyle=hline.style_dotted)
+obLevel = hline(70, title="Overbought", color=#787B86, linestyle=hline.style_dotted)
+osLevel = hline(30, title="Oversold", color=#787B86, linestyle=hline.style_dotted)
+fill(obLevel, osLevel, title="Background", color=color.rgb(33, 150, 243, 90))
+
+plot(
+     plFound ? osc[lbRRSIInput] : na,
+     offset=-lbRRSIInput,
+     title="Regular Bullish",
+     linewidth=2,
+     color=(bullCond ? bullColor : noneColor),
+     style=plot.style_linebr,
+	 display = display.pane,
+	 editable = plotBullRSIInput
+     )
+
+plotshape(
+	 bullCond ? osc[lbRRSIInput] : na,
+	 offset=-lbRRSIInput,
+	 title="Regular Bullish Label",
+	 text="🟢  Bull ",
+	 style=shape.labelup,
+	 location=location.absolute,
+	 color=bullColor,
+	 textcolor=textColor,
+	 editable = plotBullRSIInput
+	 )
+
+plot(
+	 plFound ? osc[lbRRSIInput] : na,
+	 offset=-lbRRSIInput,
+	 title="Hidden Bullish",
+	 linewidth=2,
+	 color=(hiddenBullCond ? hiddenBullColor : noneColor),
+	 display = display.pane,
+	 editable = plotHiddenBullRSIInput
+	 )
+
+plotshape(
+	 hiddenBullCond ? osc[lbRRSIInput] : na,
+	 offset=-lbRRSIInput,
+	 title="Hidden Bullish Label",
+	 text=" H Bull ",
+	 style=shape.labelup,
+	 location=location.absolute,
+	 color=bullColor,
+	 textcolor=textColor,
+	 editable = plotHiddenBullRSIInput
+	 )
+
+plot(
+	 phFound ? osc[lbRRSIInput] : na,
+	 offset=-lbRRSIInput,
+	 title="Regular Bearish",
+	 linewidth=2,
+	 color=(bearCond ? bearColor : noneColor),
+	 display = display.pane,
+	 editable = plotBearRSIInput
+	 )
+
+plotshape(
+	 bearCond ? osc[lbRRSIInput] : na,
+	 offset=-lbRRSIInput,
+	 title="Regular Bearish Label",
+	 text=" Bear ",
+	 style=shape.labeldown,
+	 location=location.absolute,
+	 color=bearColor,
+	 textcolor=textColor,
+	 editable = plotBearRSIInput
+	 )
+
+plot(
+	 phFound ? osc[lbRRSIInput] : na,
+	 offset=-lbRRSIInput,
+	 title="Hidden Bearish",
+	 linewidth=2,
+	 color=(hiddenBearCond ? hiddenBearColor : noneColor),
+	 display = display.pane,
+	 editable = plotHiddenBearRSIInput
+	 )
+
+plotshape(
+	 hiddenBearCond ? osc[lbRRSIInput] : na,
+	 offset=-lbRRSIInput,
+	 title="Hidden Bearish Label",
+	 text=" H Bear ",
+	 style=shape.labeldown,
+	 location=location.absolute,
+	 color=bearColor,
+	 textcolor=textColor,
+	 editable = plotHiddenBearRSIInput
+	 )
+
 // ****** Alertes ******
 
-
-
-
-
-
-
-
-
-
-
-
+alertcondition(bullCondAlert, title='Regular Bullish Divergence', message="Found a new Regular Bullish Divergence, `Pivot Lookback Right` number of bars to the left of the current bar")
+alertcondition(hiddenBullCondAlert, title='Hidden Bullish Divergence', message='Found a new Hidden Bullish Divergence, `Pivot Lookback Right` number of bars to the left of the current bar')
+alertcondition(bearCondAlert, title='Regular Bearish Divergence', message='Found a new Regular Bearish Divergence, `Pivot Lookback Right` number of bars to the left of the current bar')
+alertcondition(hiddenBearCondAlert, title='Hidden Bearish Divergence', message='Found a new Hidden Bearish Divergence, `Pivot Lookback Right` number of bars to the left of the current bar')
