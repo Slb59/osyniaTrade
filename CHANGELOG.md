@@ -10,3 +10,7 @@
 ### Ajouté
 - ajout de l'indicateur SMA
 - ajout de condition d'affichage pour macd et RSI
+
+## [0.1.0] - 2026-05-05
+### Ajouté
+- ajout de l'indicateur CMO

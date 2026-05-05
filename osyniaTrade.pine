@@ -30,7 +30,18 @@ noneColor = color.new(color.gray, 100)
 
 // ===== PARAMÈTRES GENERAL =====
 GRP_GENERAL = 'General'
-
+plotSmaInput = input.bool(
+	defval=true, title='Ind. SMA', group=GRP_GENERAL
+)
+plotRsiInput = input.bool(
+	defval=false, title='Ind. RSI', group=GRP_GENERAL
+)
+plotMacdInput = input.bool(
+	defval=false, title='Ind. MACD', group=GRP_GENERAL
+)
+plotVidyaInput = input.bool(
+	defval=true, title='Ind. VIDYA', group=GRP_GENERAL
+)
 
 // ===== PARAMÈTRES MACD =====
 GRP_MACD = 'MACD'
@@ -58,20 +69,61 @@ GRP_SMA = 'SMA'
 smaLongLengthInput = input.int(389, 'Long Length', minval=1, group = GRP_SMA)
 smaSrcInput = input.source(close, 'Source', group = GRP_SMA)
 smaOffsetInput = input.int(0, 'Offset', minval = -500, maxval = 500, display = display.none, group = GRP_SMA)
-lengthSMAInput = input.int(9, "SMA Length", minval=1, group = GRP_SMA)
+lengthSMAInput = input.int(13, "SMA Length", minval=1, group = GRP_SMA)
+lengthEMAInput = input.int(25, "EMA Length", minval=1, group = GRP_SMA)
+
+// ===== PARAMÈTRES VIDYA ====
+GRP_VIDYA = 'VIDYA'
+cmoCloseInput = input.int(6, "CMO Close", minval=1, group = GRP_VIDYA)
+cmoHLInput = input.int(9, "CMO High/Low", minval=1, group = GRP_VIDYA)
 
 // ****** Fonctions ******
 
-// @function     -
-// @param        -
-// @returns      -
-// Dependencies  -
+// @function     Fonction pour calculer CMO
+// @description  Chande Momentum Oscillator
+// mesurer la force relative de la hausse et de la baisse d'un actif sur une période donnée.
+// Si src est le prix de clôture, up est la somme des hausses de prix sur les period dernières bougies
+// CMO est le ratio entre la somme des hausses et la somme des baisses
+// +50 à +100 : Forte tendance haussière (surachat)
+// 0 à +50 : tendance modérée
+// 0 : equilibre
+// ne convient pas sur des actions peu volatiles
+// @param        src, period
+// @returns      CMO, na si la somme est nulle
+calculateCMO(src, period) =>
+    up = math.sum(math.max(src - src[1], 0), period)
+    down = math.sum(math.max(src[1] - src, 0), period)
+    CMO = (up + down) != 0 ? (up - down) / (up + down) * 10 : na
 
+// ====== VIDYA ========
+// ******* Calculs *****
+cmo = calculateCMO(close, cmoCloseInput)
+plot(
+	plotVidyaInput ? cmo : na,
+	color = color.green
+)
+hline(5, "Overbought", color=color.red, linestyle=hline.style_dashed)
+hline(-5, "Oversold", color=color.green, linestyle=hline.style_dashed)
+hline(0, "Neutral", color=color.gray)
+
+// ====== MACD =========
 // ****** Calculs ******
 
 // macd
 [macdLine, signalLine, histLine] = ta.macd(close, fastInput, slowInput, 9)
 
+// ****** Visuels ******
+plot( 
+	plotMacdInput ? macdLine : na, 
+	color = color.red
+)
+plot(
+	plotMacdInput ? signalLine : na, 
+	color = color.yellow
+)
+
+// ====== RSI =========
+// ****** Calculs ******
 // rsi
 osc = ta.rsi(srcRSIInput, lenRSIInput)
 plFound = na(ta.pivotlow(osc, lbLRSIInput, lbRRSIInput)) ? false : true
@@ -131,45 +183,27 @@ priceLH = high[lbRRSIInput] < ta.valuewhen(phFound, high[lbRRSIInput], 1)
 hiddenBearCondAlert = priceLH and oscHH and phFound
 hiddenBearCond = plotHiddenBearRSIInput and hiddenBearCondAlert
 
-// calcul sma selon choix de la source
-sma_var = ta.sma(smaSrcInput, lengthSMAInput)
-
-// ****** Strategies ******
-
 // ****** Visuels ******
 
-var plot_macd = true
-
-plot( 
-	plot_macd ? macdLine : na, 
-	color = color.red
-)
 plot(
-	plot_macd ? signalLine : na, 
-	color = color.yellow
-)
-
-var plot_rsi = false
-
-plot(
-	plot_rsi ? osc : na, 
+	plotRsiInput ? osc : na, 
 	title="RSI", 
 	linewidth=2, 
 	color=#2962FF
 )
 
 hline(
-	plot_rsi ? 50 : na, 
+	plotRsiInput ? 50 : na, 
 	title="Middle Line", 
 	color=#787B86, linestyle=hline.style_dotted
 )
 obLevel = hline(
-	plot_rsi ? 70 : na, 
+	plotRsiInput ? 70 : na, 
 	title="Overbought", 
 	color=#787B86, linestyle=hline.style_dotted
 )
 osLevel = hline(
-	plot_rsi ? 30 : na, 
+	plotRsiInput ? 30 : na, 
 	title="Oversold", 
 	color=#787B86, linestyle=hline.style_dotted
 )
@@ -178,7 +212,7 @@ fill(obLevel, osLevel,
 )
 
 plot(
-     plFound and plot_rsi ? osc[lbRRSIInput] : na,
+     plFound and plotRsiInput ? osc[lbRRSIInput] : na,
      offset=-lbRRSIInput,
      title="Regular Bullish",
      linewidth=2,
@@ -189,7 +223,7 @@ plot(
      )
 
 plotshape(
-	 bullCond and plot_rsi ? osc[lbRRSIInput] : na,
+	 bullCond and plotRsiInput ? osc[lbRRSIInput] : na,
 	 offset=-lbRRSIInput,
 	 title="Regular Bullish Label",
 	 text="🟢  Bull ",
@@ -201,7 +235,7 @@ plotshape(
 	 )
 
 plot(
-	 plFound and plot_rsi ? osc[lbRRSIInput] : na,
+	 plFound and plotRsiInput ? osc[lbRRSIInput] : na,
 	 offset=-lbRRSIInput,
 	 title="Hidden Bullish",
 	 linewidth=2,
@@ -211,7 +245,7 @@ plot(
 	 )
 
 plotshape(
-	 hiddenBullCond and plot_rsi ? osc[lbRRSIInput] : na,
+	 hiddenBullCond and plotRsiInput ? osc[lbRRSIInput] : na,
 	 offset=-lbRRSIInput,
 	 title="Hidden Bullish Label",
 	 text=" H Bull ",
@@ -223,7 +257,7 @@ plotshape(
 	 )
 
 plot(
-	 phFound and plot_rsi ? osc[lbRRSIInput] : na,
+	 phFound and plotRsiInput ? osc[lbRRSIInput] : na,
 	 offset=-lbRRSIInput,
 	 title="Regular Bearish",
 	 linewidth=2,
@@ -233,7 +267,7 @@ plot(
 	 )
 
 plotshape(
-	 bearCond and plot_rsi ? osc[lbRRSIInput] : na,
+	 bearCond and plotRsiInput ? osc[lbRRSIInput] : na,
 	 offset=-lbRRSIInput,
 	 title="Regular Bearish Label",
 	 text=" Bear ",
@@ -245,7 +279,7 @@ plotshape(
 	 )
 
 plot(
-	 phFound and plot_rsi ? osc[lbRRSIInput] : na,
+	 phFound and plotRsiInput ? osc[lbRRSIInput] : na,
 	 offset=-lbRRSIInput,
 	 title="Hidden Bearish",
 	 linewidth=2,
@@ -255,7 +289,7 @@ plot(
 	 )
 
 plotshape(
-	 hiddenBearCond and plot_rsi ? osc[lbRRSIInput] : na,
+	 hiddenBearCond and plotRsiInput ? osc[lbRRSIInput] : na,
 	 offset=-lbRRSIInput,
 	 title="Hidden Bearish Label",
 	 text=" H Bear ",
@@ -265,18 +299,44 @@ plotshape(
 	 textcolor=textColor,
 	 editable = plotHiddenBearRSIInput
 	 )
+// ====== SMA =========
+// ****** Calculs ******
+// calcul sma selon choix de la source
+sma_var = ta.sma(smaSrcInput, lengthSMAInput)
+ema_var = ta.ema(smaSrcInput, lengthEMAInput)
+sellcondition = ta.crossover(sma_var, ema_var)
+buycondition = ta.crossover(ema_var, sma_var)
 
-// ****** SMA ******
-var plot_sma = true
+// ****** Visuels ******
 plot(
-	plot_sma ? sma_var : na, 
+	plotSmaInput ? sma_var : na, 
 	color = color.rgb(20, 62, 96), 
 	title = "SMA", 
 	offset = smaOffsetInput
 )
-//plot(volume)
-//plot(close)
+plot(
+	plotSmaInput ? ema_var : na, 
+	color = color.red, 
+	title = "SMA", 
+	offset = smaOffsetInput
+)
+bgcolor(
+	plotSmaInput and sellcondition ? color.orange: na
+)
+bgcolor(
+	plotSmaInput and buycondition ? color.green: na
+)
+if sellcondition or buycondition
+	line.new(
+		x1 = bar_index -1,
+		y1 = close,
+		x2 = bar_index +1,
+		y2 = close,
+		color = color.black
+	)
 
+
+// ****** Strategies ******
 
 // ****** Alertes ******
 
