@@ -10,7 +10,7 @@
 
 // ****** Declarations ******
 indicator(
-	title='osyniaTrade-0.0.1', 
+	title='osyniaTrade-0.1.1', 
 	shorttitle = 'oTrade', 
 	overlay=true, 
 	max_labels_count=500
@@ -76,35 +76,68 @@ lengthEMAInput = input.int(25, "EMA Length", minval=1, group = GRP_SMA)
 GRP_VIDYA = 'VIDYA'
 cmoCloseInput = input.int(6, "CMO Close", minval=1, group = GRP_VIDYA)
 cmoHLInput = input.int(9, "CMO High/Low", minval=1, group = GRP_VIDYA)
+emaPeriodInput = input.int(3, "EMA Period", minval=1, group = GRP_VIDYA)
 
 // ****** Fonctions ******
 
-// @function     Fonction pour calculer CMO
-// @description  Chande Momentum Oscillator
-// mesurer la force relative de la hausse et de la baisse d'un actif sur une période donnée.
-// Si src est le prix de clôture, up est la somme des hausses de prix sur les period dernières bougies
-// CMO est le ratio entre la somme des hausses et la somme des baisses
-// +50 à +100 : Forte tendance haussière (surachat)
-// 0 à +50 : tendance modérée
-// 0 : equilibre
-// ne convient pas sur des actions peu volatiles
+// @function CMO (Chande Momentum Oscillator)
+// - mesurer la force relative de la hausse et de la baisse d'un actif sur une période donnée.
+// - +50 à +100 : Forte tendance haussière (surachat)
+// - 0 à +50 : tendance modérée
+// - 0 : equilibre
+// - ne convient pas sur des actions peu volatiles
+// - src - Source des données (ex : close, high, low)
 // @param        src, period
 // @returns      CMO, na si la somme est nulle
 calculateCMO(src, period) =>
-    up = math.sum(math.max(src - src[1], 0), period)
+	// somme des hausses de prix sur les period dernières bougies
+	up = math.sum(math.max(src - src[1], 0), period)
     down = math.sum(math.max(src[1] - src, 0), period)
-    CMO = (up + down) != 0 ? (up - down) / (up + down) * 10 : na
+	// calcul le ratio entre la somme des hausses et la somme des baisses
+	CMO = (up + down) != 0 ? (up - down) / (up + down) * 100 : na
+
+// @function VIDYA (Volatility Index Dynamic Average)
+// - Le VIDYA est une moyenne mobile exponentielle (EMA) adaptative :
+// - Quand le marché est volatile (CMO proche de ±100) → Le VIDYA réagit rapidement aux changements de prix (lissage faible).
+// - Quand le marché est calme (CMO proche de 0) → Le VIDYA lisse davantage les données (réaction plus lente).
+// - src - Source des données (ex : close, high, low)
+// - periodCMO - Période pour calculer le CMO (utilisé pour mesurer la volatilité).
+// - periodEMA - Période de base pour le lissage exponentiel (comme une EMA classique).
+// @param src, periodCMO, periodEMA
+// @returns      VIDYA
+calculateVIDYA(src, periodCMO, periodEMA) =>
+    var float vidya = na
+   	// Mesurer la force de la tendance (volatilité directionnelle)
+    cmo = calculateCMO(src, periodCMO)
+   	// Facteur de lissage de base, plus periodEMA est grand, plus le lissage est fort (réaction lente)
+    smoothFactor = 2.0 / (1.0 + periodEMA)
+	// Calcul du CMO absolu (volatilité) - convertit le CMO en une valeur entre 0 et 1 
+    absCMO = math.abs(cmo / 100)
+	// Fonction recursive
+	// Si vidya[1] est na (première valeur), alors vidya = src
+	// Partie "nouvelle donnée" : src * smoothFactor * absCMO
+	// Plus absCMO est proche de 1 (volatilité élevée), plus le poids de src est important → réaction rapide
+	// Plus absCMO est proche de 0 (volatilité faible), plus le poids de src est faible → lissage fort.
+	// Partie "historique" : vidya[1] * (1 - smoothFactor * absCMO)
+	// conserve l’inertie des valeurs précédentes
+    vidya := na(vidya[1]) ? src : src * smoothFactor * absCMO + vidya[1] * (1 - smoothFactor * absCMO)
+    vidya
+
 
 // ====== VIDYA ========
 // ******* Calculs *****
+
 cmo = calculateCMO(close, cmoCloseInput)
+vidya = calculateVIDYA(src = close, periodCMO = cmoCloseInput, periodEMA = emaPeriodInput )
+
 plot(
-	plotVidyaInput ? cmo : na,
-	color = color.green
+	plotVidyaInput ? vidya : na,
+	color = color.blue,
+	linewidth = 2,
 )
-hline(5, "Overbought", color=color.red, linestyle=hline.style_dashed)
-hline(-5, "Oversold", color=color.green, linestyle=hline.style_dashed)
-hline(0, "Neutral", color=color.gray)
+// hline(5, "Overbought", color=color.red, linestyle=hline.style_dashed)
+// hline(-5, "Oversold", color=color.green, linestyle=hline.style_dashed)
+// hline(0, "Neutral", color=color.gray)
 
 // ====== MACD =========
 // ****** Calculs ******

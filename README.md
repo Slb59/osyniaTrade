@@ -5,3 +5,4 @@ indicateurs:
 -MACD
 -RSI
 -SMA
+-VIDYA

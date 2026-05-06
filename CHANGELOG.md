@@ -14,3 +14,7 @@
 ## [0.1.0] - 2026-05-05
 ### Ajouté
 - ajout de l'indicateur CMO
+
+## [0.1.1] - 2026-05-06
+### Ajouté
+- ajout du calcul vydia + descriptions dans la fonction
