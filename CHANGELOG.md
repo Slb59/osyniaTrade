@@ -18,3 +18,7 @@
 ## [0.1.1] - 2026-05-06
 ### Ajouté
 - ajout du calcul vydia + descriptions dans la fonction
+
+## [0.1.2] - 2026-05-07
+### Ajouté
+- ajout conditions achat/vente en fonction de VIDYA/RSI

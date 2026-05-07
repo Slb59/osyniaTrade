@@ -5,15 +5,18 @@
 // ****** Version ******
 //@version=6
 
-// ****** Description de jackieTrade ******
+// ****** Description de osyniaTrade ******
 // Mon script osyniaTrade
+// Achat : Prix > VIDYA + confirmation par un autre indicateur (ex : RSI > 50).
+// Vente : Prix < VIDYA + confirmation par un autre indicateur.
+// Filtre de volatilité : Combiner avec l’ATR pour éviter les faux signaux en période de faible volatilité.
 
 // ****** Declarations ******
 indicator(
-	title='osyniaTrade-0.1.1', 
+	title = 'osyniaTrade-0.1.2', 
 	shorttitle = 'oTrade', 
-	overlay=true, 
-	max_labels_count=500
+	overlay = true, 
+	max_labels_count = 500
 )
 
 // ****** Import ******
@@ -63,6 +66,9 @@ plotBullRSIInput = input(title='Plot Bullish', defval=true, display = display.no
 plotHiddenBullRSIInput = input(title='Plot Hidden Bullish', defval=false, display = display.none, group=GRP_RSI)
 plotBearRSIInput = input(title='Plot Bearish', defval=true, display = display.none, group=GRP_RSI)
 plotHiddenBearRSIInput = input(title='Plot Hidden Bearish', defval=false, display = display.none, group=GRP_RSI)
+// Seuils de comparaison pour achat/vente avec vidya
+rsiOverboughtInput = input(50, "Seuil RSI Achat")
+rsiOversoldInput = input(50, "Seuil RSI Vente")
 
 // ===== PARAMÈTRES SMA =====
 GRP_SMA = 'SMA'
@@ -76,7 +82,8 @@ lengthEMAInput = input.int(25, "EMA Length", minval=1, group = GRP_SMA)
 GRP_VIDYA = 'VIDYA'
 cmoCloseInput = input.int(6, "CMO Close", minval=1, group = GRP_VIDYA)
 cmoHLInput = input.int(9, "CMO High/Low", minval=1, group = GRP_VIDYA)
-emaPeriodInput = input.int(3, "EMA Period", minval=1, group = GRP_VIDYA)
+emaPeriodInput = input.int(20, "EMA Period", minval=1, group = GRP_VIDYA)
+periodCMOInput = input(14, "Période CMO pour VIDYA", group = GRP_VIDYA)
 
 // ****** Fonctions ******
 
@@ -86,7 +93,7 @@ emaPeriodInput = input.int(3, "EMA Period", minval=1, group = GRP_VIDYA)
 // - 0 à +50 : tendance modérée
 // - 0 : equilibre
 // - ne convient pas sur des actions peu volatiles
-// - src - Source des données (ex : close, high, low)
+// - src : Source des données (ex : close, high, low)
 // @param        src, period
 // @returns      CMO, na si la somme est nulle
 calculateCMO(src, period) =>
@@ -100,9 +107,9 @@ calculateCMO(src, period) =>
 // - Le VIDYA est une moyenne mobile exponentielle (EMA) adaptative :
 // - Quand le marché est volatile (CMO proche de ±100) → Le VIDYA réagit rapidement aux changements de prix (lissage faible).
 // - Quand le marché est calme (CMO proche de 0) → Le VIDYA lisse davantage les données (réaction plus lente).
-// - src - Source des données (ex : close, high, low)
-// - periodCMO - Période pour calculer le CMO (utilisé pour mesurer la volatilité).
-// - periodEMA - Période de base pour le lissage exponentiel (comme une EMA classique).
+// - src : Source des données (ex : close, high, low)
+// - periodCMO : Période pour calculer le CMO (utilisé pour mesurer la volatilité).
+// - periodEMA : Période de base pour le lissage exponentiel (comme une EMA classique).
 // @param src, periodCMO, periodEMA
 // @returns      VIDYA
 calculateVIDYA(src, periodCMO, periodEMA) =>
@@ -123,18 +130,64 @@ calculateVIDYA(src, periodCMO, periodEMA) =>
     vidya := na(vidya[1]) ? src : src * smoothFactor * absCMO + vidya[1] * (1 - smoothFactor * absCMO)
     vidya
 
+// @function Fonction pour calculer le RSI
+// - src : Source des données (ex : close, high, low)
+// - rsiLength : Période du RSI
+calculateRSI(src, rsiLength) =>
+    ta.rsi(src, rsiLength)
+
+// @function donne les conditions d'achat et de vente
+// - buyCondition : true si Prix > VIDYA ET RSI > 50
+// - sellCondition : true si Prix < VIDYA ET RSI < 50 (ou autre seuil)
+// - src : Source des données (ex : close, high, low)
+// - periodCMO : Période pour calculer le CMO (utilisé pour mesurer la volatilité).
+// - periodEMA : Période de base pour le lissage exponentiel (comme une EMA classique).
+// - rsiLength : Période du RSI
+// - rsiOverbought et rsiOversold (seuils pour le RSI, par défaut 50)
+checkCondition(src, periodCMO, periodEMA, rsiLength, rsiOverbought, rsiOversold) =>
+	vidya = calculateVIDYA(src, periodCMO, periodEMA)
+	rsi = calculateRSI(src, rsiLength)
+	buyCondition = (src > vidya) and (rsi > rsiOverbought)
+	sellCondition = (src < vidya) and (rsi < rsiOversold)
+	[buyCondition, sellCondition]
 
 // ====== VIDYA ========
 // ******* Calculs *****
 
 cmo = calculateCMO(close, cmoCloseInput)
 vidya = calculateVIDYA(src = close, periodCMO = cmoCloseInput, periodEMA = emaPeriodInput )
+rsiValue = calculateRSI(close, lenRSIInput)
+[buySignal, sellSignal] = checkCondition(
+	close, 
+	periodCMOInput, emaPeriodInput, 
+	lenRSIInput,
+	rsiOverboughtInput, rsiOversoldInput
+)
 
+// ******* Visuels *****
+// tracer vidya
 plot(
 	plotVidyaInput ? vidya : na,
+	title = "VIDYA",
 	color = color.blue,
-	linewidth = 2,
+	linewidth = 2
 )
+// tracer rsi
+plotchar(
+	plotVidyaInput ? rsiValue : na, 
+	title = "RSI-VIDYA", 
+	color = color.purple, 
+	char = '•'
+)
+
+// Signaux d'achat/vente
+plotshape(buySignal, title="Buy Signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(sellSignal, title="Sell Signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+// ******* Alertes *****
+alertcondition(buySignal, title="Buy Alert", message="Achat : Prix > VIDYA + RSI > 50")
+alertcondition(sellSignal, title="Sell Alert", message="Vente : Prix < VIDYA + RSI < 50")
+
 // hline(5, "Overbought", color=color.red, linestyle=hline.style_dashed)
 // hline(-5, "Oversold", color=color.green, linestyle=hline.style_dashed)
 // hline(0, "Neutral", color=color.gray)
@@ -158,7 +211,7 @@ plot(
 // ====== RSI =========
 // ****** Calculs ******
 // rsi
-osc = ta.rsi(srcRSIInput, lenRSIInput)
+osc = calculateRSI(srcRSIInput, lenRSIInput)
 plFound = na(ta.pivotlow(osc, lbLRSIInput, lbRRSIInput)) ? false : true
 phFound = na(ta.pivothigh(osc, lbLRSIInput, lbRRSIInput)) ? false : true
 
