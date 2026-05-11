@@ -1,11 +1,11 @@
 # osyniaTrade
 pine scripts
 
-indicateurs:
--MACD
--RSI
--SMA
--VIDYA
+## Indicateurs étudiés
+- MACD : Moving Average Convergence/Divergence, Convergence et Divergence des Moyennes Mobiles
+- RSI : Relative Strength Index, mesure la force et la vitesse des mouvements de prix 
+- SMA : Simple Moving Average, moyenne arithmétique des prix 
+- VIDYA : Volatility Index Dynamic Average, moyenne mobile exponentielle (EMA) adaptative
 
 ## Maintenance
 ### Créer une branche feature

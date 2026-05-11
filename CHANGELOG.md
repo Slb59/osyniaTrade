@@ -22,3 +22,9 @@
 ## [0.1.2] - 2026-05-07
 ### Ajouté
 - ajout conditions achat/vente en fonction de VIDYA/RSI
+
+## [0.1.3] - 2026-05-11
+### Ajouté
+- fonction getNextTimeframe(tf)
+- fonction findNearestTPs(all_tps, entry_price, is_long)
+- fonction calculateSlopeAngle(src, length), ajout de bar_index >= length car sinon les premières valeurs fausses le calcul de la pente

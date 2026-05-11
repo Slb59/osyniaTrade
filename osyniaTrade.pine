@@ -13,7 +13,7 @@
 
 // ****** Declarations ******
 indicator(
-	title = 'osyniaTrade-0.1.2', 
+	title = 'osyniaTrade-0.1.3', 
 	shorttitle = 'oTrade', 
 	overlay = true, 
 	max_labels_count = 500
@@ -150,6 +150,76 @@ checkCondition(src, periodCMO, periodEMA, rsiLength, rsiOverbought, rsiOversold)
 	buyCondition = (src > vidya) and (rsi > rsiOverbought)
 	sellCondition = (src < vidya) and (rsi < rsiOversold)
 	[buyCondition, sellCondition]
+
+// @function     Fonction pour obtenir le timeframe supérieur
+// @param        tf
+// @returns      timeframe supérieur
+getNextTimeframe(tf) =>
+    if tf == '1'
+        '5'
+    else if tf == '5'
+        '15'
+    else if tf == '15'
+        '60'
+    else if tf == '60'
+        '240'
+    else if tf == '240'
+        'D'
+    else if tf == 'D'
+        'W'
+    else if tf == 'W'
+        'M'
+    else if tf == 'M'
+        '3M'
+    else if tf == '3M'
+        '12M'
+    else
+        '12M'
+
+// @function     Fonction pour trouver les 5 TPs les plus proches
+// @param        all_tps, entry_price, is_long
+// @returns      nearest_tps
+findNearestTPs(all_tps, entry_price, is_long) =>
+    var nearest_tps = array.new_float(5, 0.0)
+    array.sort(all_tps, is_long ? order.ascending : order.descending)
+
+    count = 0
+    for i = 0 to array.size(all_tps) - 1 by 1
+        tp = array.get(all_tps, i)
+        if is_long and tp > entry_price or not is_long and tp < entry_price
+            array.set(nearest_tps, count, tp)
+            count := count + 1
+            if count == 5
+                break
+
+    nearest_tps
+
+// @function     Calcul de la pente
+// - Elle permet de quantifier la force et la direction d'une tendance en mesurant l'inclinaison 
+// de la droite de régression linéaire entre deux points.
+// - Cas d'usage 1 : N'acheter que si la pente du prix est > 10° (tendance haussière forte)
+// calculateSlopeAngle(close, 14) > 10
+// - Cas d'usage 2 : Acheter si la pente du prix > pente de l'EMA (tendance haussière confirmée)
+// priceSlope > emaSlope and priceSlope > 0, avec priceSlope = calculateSlopeAngle(close, 14)
+// et emaSlope = calculateSlopeAngle(ema20, 14) sachant ema20 = ta.ema(close, 20)
+// - src : Source des données (ex : close, high, low)
+// - length : Nombre de périodes pour calculer la pente
+// attention : un length trop petit et la pente sera trop volatile, un length trop grand et la pente sera trop 
+// lissée
+// @param        src, length
+// @returns      slope
+calculateSlopeAngle(src, length) =>
+    rad2degree = 180 / math.pi // environ 57.5958
+	// Calcul de la pente en radians
+	// nz() (non-zero) remplace les valeurs na (non disponibles) par 0.
+    // (src - nz(src[length])) / length : Pente moyenne sur length périodes (variation par unité de temps)
+	// Exemple : Si src = close et length = 10, alors close - close[10] donne la variation du prix sur 10 bougies.
+	pente = src - nz(src[length])
+	// calcul l'arc tangeante : La pente d'une droite est liée à son angle par la relation tan(θ) = (Δy / Δx)
+	// bar_index >= length pour ignorer les premieres valeurs car cela fausse le calcul de la pente
+	slope = bar_index >= length ? rad2degree * math.atan(pente / length) : na
+    slope
+	
 
 // ====== VIDYA ========
 // ******* Calculs *****
