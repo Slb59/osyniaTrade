@@ -1,3 +1,8 @@
+## [0.2.0] - 2026-05-13
+### Ajouté
+- paramétrage pour calcul des bandes de bollinger
+
+
 ## [0.1.4] - 2026-05-12
 ### Ajouté
 - fonction checkConditionSma : donne les conditions d'achat/vente en fonction du SMA

@@ -45,6 +45,9 @@ plotMacdInput = input.bool(
 plotVidyaInput = input.bool(
 	defval=true, title='Ind. VIDYA', group=GRP_GENERAL
 )
+plotBollingerInput = input.bool(
+	defval=true, title='Ind. Bollinger', group=GRP_GENERAL
+)
 
 // ===== PARAMÈTRES MACD =====
 GRP_MACD = 'MACD'
@@ -75,15 +78,20 @@ GRP_SMA = 'SMA'
 smaLongLengthInput = input.int(389, 'Long Length', minval=1, group = GRP_SMA)
 smaSrcInput = input.source(close, 'Source', group = GRP_SMA)
 smaOffsetInput = input.int(0, 'Offset', minval = -500, maxval = 500, display = display.none, group = GRP_SMA)
-lengthSMAInput = input.int(13, "SMA Length", minval=1, group = GRP_SMA)
-lengthEMAInput = input.int(25, "EMA Length", minval=1, group = GRP_SMA)
+smaLengthInput = input.int(20, "SMA Length", minval=1, group = GRP_SMA)
+emaPeriodInput = input.int(25, "EMA Length", minval=1, group = GRP_SMA)
 
 // ===== PARAMÈTRES VIDYA ====
 GRP_VIDYA = 'VIDYA'
-cmoCloseInput = input.int(6, "CMO Close", minval=1, group = GRP_VIDYA)
-cmoHLInput = input.int(9, "CMO High/Low", minval=1, group = GRP_VIDYA)
-emaPeriodInput = input.int(20, "EMA Period", minval=1, group = GRP_VIDYA)
-periodCMOInput = input(14, "Période CMO pour VIDYA", group = GRP_VIDYA)
+cmoCloseInput = input.int(defval=6, title="CMO Close", minval=1, group = GRP_VIDYA)
+cmoHLInput = input.int(defval=9, title="CMO High/Low", minval=1, group = GRP_VIDYA)
+cmoPeriodeInput = input(defval=14, title="Période CMO pour VIDYA", group = GRP_VIDYA)
+
+// ===== PARAMETRES BOLLINGER ====
+GRP_BOLLINGER = 'BOLLINGER'
+bollingerMultInput = input(defval=2.0, title="Multiplicateur écart-type", group=GRP_BOLLINGER)
+bollingerSrcInput = input(defval=close, title='Source', group=GRP_BOLLINGER)
+
 
 // ****** Fonctions ******
 
@@ -144,7 +152,7 @@ calculateRSI(src, rsiLength) =>
 // - periodEMA : Période de base pour le lissage exponentiel (comme une EMA classique).
 // - rsiLength : Période du RSI
 // - rsiOverbought et rsiOversold (seuils pour le RSI, par défaut 50)
-checkCondition(src, periodCMO, periodEMA, rsiLength, rsiOverbought, rsiOversold) =>
+checkConditionRsi(src, periodCMO, periodEMA, rsiLength, rsiOverbought, rsiOversold) =>
 	vidya = calculateVIDYA(src, periodCMO, periodEMA)
 	rsi = calculateRSI(src, rsiLength)
 	buyCondition = (src > vidya) and (rsi > rsiOverbought)
@@ -219,27 +227,65 @@ calculateSlopeAngle(src, length) =>
 	// bar_index >= length pour ignorer les premieres valeurs car cela fausse le calcul de la pente
 	slope = bar_index >= length ? rad2degree * math.atan(pente / length) : na
     slope
-	
 
-// ====== VIDYA ========
+// @function donne les conditions d'achat et de vente
+// - buyCondition : vidya_close > sma and vidya_high > sma
+// - sellCondition : vidya_close < sma and vidya_low < sma
+// - cmoClose : Période pour calculer le CMO de cloture.
+// - cmoHL : Période pour calculer le CMO High/Low
+// - periodEMA : Période de base pour le lissage exponentiel (comme une EMA classique).
+// - smaLength : Période du SMA
+checkConditionSma(cmoClose = 6, cmoHL = 9, periodEMA = 3, smaLength = 9) =>
+	vidya_close = calculateVIDYA(close, cmoClose, periodEMA)
+    vidya_high = calculateVIDYA(high, cmoHL, periodEMA)
+    vidya_low = calculateVIDYA(low, cmoHL, periodEMA)
+    sma = ta.sma(close, smaLength)
+	buyCondition = vidya_close > sma and vidya_high > sma
+    sellCondition = vidya_close < sma and vidya_low < sma
+	[buyCondition, sellCondition]
+
+// ====== INDICATEUR BOLLINGER ======
+// ******* Calculs *******
+// Bande centrale (SMA)
+basis = ta.sma(bollingerSrcInput, smaLengthInput)
+// Écart-type × multiplicateur
+dev = bollingerMultInput * ta.stdev(bollingerSrcInput, smaLengthInput) 
+// Bande supérieure
+upper = basis + dev 
+// Bande inférieure
+lower = basis - dev
+
+// ******* Visuels *******
+plot(basis, "Bande centrale", color=color.blue, linewidth=2)
+plot(upper, "Bande supérieure", color=color.red, linewidth=1)
+plot(lower, "Bande inférieure", color=color.green, linewidth=1)
+fill(upper, lower, color=color.new(color.purple, 90), title="Zone de volatilité")
+
+// ******* Alertes *******
+
+// ====== INDICATEUR VIDYA ========
 // ******* Calculs *****
 
 cmo = calculateCMO(close, cmoCloseInput)
 vidya = calculateVIDYA(src = close, periodCMO = cmoCloseInput, periodEMA = emaPeriodInput )
 rsiValue = calculateRSI(close, lenRSIInput)
-[buySignal, sellSignal] = checkCondition(
+[buySignalRsi, sellSignalRsi] = checkConditionRsi(
 	close, 
-	periodCMOInput, emaPeriodInput, 
+	cmoPeriodeInput, emaPeriodInput, 
 	lenRSIInput,
 	rsiOverboughtInput, rsiOversoldInput
 )
+[buySignalSma, sellSignalSma] = checkConditionSma(
+	cmoCloseInput, cmoHLInput, emaPeriodInput, 
+	smaLengthInput)
+
 
 // ******* Visuels *****
 // tracer vidya
 plot(
 	plotVidyaInput ? vidya : na,
 	title = "VIDYA",
-	color = color.blue,
+	color = color.rgb(239, 10, 121),
 	linewidth = 2
 )
 // tracer rsi
@@ -251,12 +297,15 @@ plotchar(
 )
 
 // Signaux d'achat/vente
-plotshape(buySignal, title="Buy Signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
-plotshape(sellSignal, title="Sell Signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+//plotshape(buySignalRsi, title="Buy Signal RSI", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(buySignalSma, title="Buy Signal SMA", style=shape.triangleup, location=location.belowbar, color=color.olive, size=size.small)
+//plotshape(sellSignalRsi, title="Sell Signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+plotshape(sellSignalSma, title="Sell Signal SMA", style=shape.triangledown, location=location.abovebar, color=color.fuchsia, size=size.small)
+
 
 // ******* Alertes *****
-alertcondition(buySignal, title="Buy Alert", message="Achat : Prix > VIDYA + RSI > 50")
-alertcondition(sellSignal, title="Sell Alert", message="Vente : Prix < VIDYA + RSI < 50")
+alertcondition(buySignalRsi, title="Buy Alert Rsi", message="Achat : Prix > VIDYA + RSI > 50")
+alertcondition(sellSignalRsi, title="Sell Alert Rsi", message="Vente : Prix < VIDYA + RSI < 50")
 
 // hline(5, "Overbought", color=color.red, linestyle=hline.style_dashed)
 // hline(-5, "Oversold", color=color.green, linestyle=hline.style_dashed)
@@ -458,8 +507,8 @@ plotshape(
 // ====== SMA =========
 // ****** Calculs ******
 // calcul sma selon choix de la source
-sma_var = ta.sma(smaSrcInput, lengthSMAInput)
-ema_var = ta.ema(smaSrcInput, lengthEMAInput)
+sma_var = ta.sma(smaSrcInput, smaLengthInput)
+ema_var = ta.ema(smaSrcInput, emaPeriodInput)
 sellcondition = ta.crossover(sma_var, ema_var)
 buycondition = ta.crossover(ema_var, sma_var)
 
