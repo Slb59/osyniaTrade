@@ -244,22 +244,71 @@ checkConditionSma(cmoClose = 6, cmoHL = 9, periodEMA = 3, smaLength = 9) =>
     sellCondition = vidya_close < sma and vidya_low < sma
 	[buyCondition, sellCondition]
 
+// @function detecte les signaux bollinger
+// - src : Source des données (ex : close, high, low)
+// - smaLength : Période du sma
+// - mult : largeur de bande bollinger
+bollingerSignals(src, smaLength, mult) =>
+
+	// Bande centrale (SMA)
+	basis = ta.sma(src, smaLength)
+	// Écart-type × multiplicateur
+	dev = mult * ta.stdev(src, smaLength) 
+	// Bande supérieure
+	upper = basis + dev 
+	// Bande inférieure
+	lower = basis - dev
+
+	// Surachat/Survente
+	overbought = src >= upper
+	oversold = src <= lower
+
+	// Breakout
+	breakoutUp = src > upper[1] and upper > upper[1]
+	breakoutDown = src < lower[1] and lower < lower[1]
+
+	// Squeeze (compression)
+	squeeze = (upper - lower) / basis < 0.1 // Seuil arbitraire (10% de la base)
+
+	[basis, upper, lower, overbought, oversold, breakoutUp, breakoutDown, squeeze]
+
 // ====== INDICATEUR BOLLINGER ======
 // ******* Calculs *******
-// Bande centrale (SMA)
-basis = ta.sma(bollingerSrcInput, smaLengthInput)
-// Écart-type × multiplicateur
-dev = bollingerMultInput * ta.stdev(bollingerSrcInput, smaLengthInput) 
-// Bande supérieure
-upper = basis + dev 
-// Bande inférieure
-lower = basis - dev
+[ basis, upper, lower, overbought, oversold, breakoutUp, breakoutDown, squeeze] = bollingerSignals(
+	bollingerSrcInput, smaLengthInput, bollingerMultInput
+)
 
 // ******* Visuels *******
+plot(bollingerSrcInput, "Prix", color=color.lime, linewidth=3)
 plot(basis, "Bande centrale", color=color.blue, linewidth=2)
-plot(upper, "Bande supérieure", color=color.red, linewidth=1)
-plot(lower, "Bande inférieure", color=color.green, linewidth=1)
-fill(upper, lower, color=color.new(color.purple, 90), title="Zone de volatilité")
+plotup=plot(upper, "Bande supérieure", color=color.red, linewidth=1)
+plotdown=plot(lower, "Bande inférieure", color=color.green, linewidth=1)
+fill(
+	plotup, plotdown,
+	color=color.rgb(65, 58, 68, 80),
+	title="Zone de volatilité"
+)
+plotshape(
+	overbought, title="Surachat", 
+	style=shape.labeldown, location=location.abovebar, 
+	color=color.red, text="Overbought"
+)
+plotshape(
+	oversold, title="Survente", 
+	style=shape.labelup, location=location.belowbar, 
+	color=color.green, text="Oversold"
+)
+plotshape(
+	breakoutUp, title="Breakout Haussier", 
+	style=shape.triangleup, location=location.belowbar, 
+	color=color.blue, size=size.small
+)
+plotshape(
+	breakoutDown, title="Breakout Baissier", 
+	style=shape.triangledown, location=location.abovebar, 
+	color=color.blue, size=size.small
+)
+bgcolor(squeeze ? color.new(color.orange, 90) : na, title="Squeeze")
 
 // ******* Alertes *******
 
